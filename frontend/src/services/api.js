@@ -1,9 +1,8 @@
 import axios from 'axios';
-
-const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+import { API_URL } from './config';
 
 const api = axios.create({
-  baseURL,
+  baseURL: API_URL,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -27,7 +26,7 @@ api.interceptors.response.use(
   (error) => {
     if (error.response && error.response.status === 401) {
       // Clear token on 401 unless it's a verify-pin failure
-      if (!error.config.url.includes('/verify-pin')) {
+      if (!error.config.url?.includes('/verify-pin')) {
         localStorage.removeItem('vr_token');
         localStorage.removeItem('vr_user');
       }

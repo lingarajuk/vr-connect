@@ -27,21 +27,36 @@ const memoriesRoutes = require('./routes/memoriesRoutes');
 const app = express();
 const server = http.createServer(app);
 
-// Client CORS origin
-const allowedOrigins = [
-  process.env.CLIENT_URL,
-  'http://localhost:5173',
-  'http://localhost:3000',
-  'http://127.0.0.1:5173',
-].filter(Boolean);
+// Client CORS origin helper supporting comma-separated list and Vercel domains
+const parseAllowedOrigins = () => {
+  const defaults = [
+    'http://localhost:5173',
+    'http://localhost:3000',
+    'http://127.0.0.1:5173',
+    'http://127.0.0.1:3000',
+  ];
+
+  if (process.env.CLIENT_URL) {
+    const custom = process.env.CLIENT_URL.split(',').map((url) => url.trim().replace(/\/$/, ''));
+    return [...defaults, ...custom];
+  }
+  return defaults;
+};
+
+const isOriginAllowed = (origin) => {
+  if (!origin) return true; // Allow mobile apps, curl, server-to-server requests
+  const allowed = parseAllowedOrigins();
+  if (allowed.includes(origin)) return true;
+  if (origin.endsWith('.vercel.app') || process.env.NODE_ENV === 'development') return true;
+  return false;
+};
 
 const corsOptions = {
   origin: (origin, callback) => {
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin) || process.env.NODE_ENV === 'development') {
+    if (isOriginAllowed(origin)) {
       return callback(null, true);
     }
-    return callback(new Error('Blocked by CORS policy'));
+    return callback(new Error(`CORS blocked for origin: ${origin}`));
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -59,7 +74,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Global Rate Limiting
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 500,
+  max: 1000,
   standardHeaders: true,
   legacyHeaders: false,
   message: {
@@ -87,8 +102,7 @@ app.get(['/', '/api/health'], (req, res) => {
 const io = new Server(server, {
   cors: {
     origin: (origin, callback) => {
-      if (!origin) return callback(null, true);
-      if (allowedOrigins.includes(origin) || process.env.NODE_ENV === 'development') {
+      if (isOriginAllowed(origin)) {
         return callback(null, true);
       }
       return callback(new Error('Blocked by Socket CORS'));
@@ -125,7 +139,7 @@ const PORT = process.env.PORT || 5000;
 connectDB().then(() => {
   MessageService.startCleanupJob(io, 5000);
 
-  server.listen(PORT, () => {
+  server.listen(PORT, '0.0.0.0', () => {
     console.log(`=========================================`);
     console.log(`  🚀 VR Connect Backend Server Running`);
     console.log(`  📡 Port: ${PORT}`);

@@ -1,4 +1,5 @@
 import { io } from 'socket.io-client';
+import { SOCKET_URL } from './config';
 
 class SocketService {
   constructor() {
@@ -12,9 +13,7 @@ class SocketService {
       return this.socket;
     }
 
-    const socketUrl = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000';
-
-    this.socket = io(socketUrl, {
+    this.socket = io(SOCKET_URL, {
       auth: { token },
       query: { token },
       transports: ['websocket', 'polling'],
@@ -45,56 +44,63 @@ class SocketService {
     }
   }
 
-  // Join a specific chat room
+  // Join a chat room
   joinChat(chatId) {
-    if (this.socket && this.socket.connected) {
+    if (this.socket && chatId) {
       this.socket.emit('join:chat', { chatId });
     }
   }
 
-  // Leave a specific chat room
+  // Leave a chat room
   leaveChat(chatId) {
-    if (this.socket && this.socket.connected) {
+    if (this.socket && chatId) {
       this.socket.emit('leave:chat', { chatId });
     }
   }
 
-  // Send message over socket
+  // Send message over WebSocket
   sendMessage(payload, callback) {
-    if (this.socket && this.socket.connected) {
+    if (this.socket) {
       this.socket.emit('message:send', payload, callback);
     }
   }
 
-  // Mark message as read
-  markAsRead(chatId, messageId) {
-    if (this.socket && this.socket.connected) {
-      this.socket.emit('message:read', { chatId, messageId });
+  // Mark message delivered
+  markDelivered(messageId, chatId) {
+    if (this.socket) {
+      this.socket.emit('message:delivered', { messageId, chatId });
     }
   }
 
-  // Emit typing start
+  // Mark message read
+  markRead(messageId, chatId) {
+    if (this.socket) {
+      this.socket.emit('message:read', { messageId, chatId });
+    }
+  }
+
+  // Start typing indicator
   startTyping(chatId) {
-    if (this.socket && this.socket.connected) {
+    if (this.socket) {
       this.socket.emit('typing:start', { chatId });
     }
   }
 
-  // Emit typing stop
+  // Stop typing indicator
   stopTyping(chatId) {
-    if (this.socket && this.socket.connected) {
+    if (this.socket) {
       this.socket.emit('typing:stop', { chatId });
     }
   }
 
-  // Add event listener
+  // Subscribe to custom event
   on(event, handler) {
     if (this.socket) {
       this.socket.on(event, handler);
     }
   }
 
-  // Remove event listener
+  // Unsubscribe from custom event
   off(event, handler) {
     if (this.socket) {
       this.socket.off(event, handler);
