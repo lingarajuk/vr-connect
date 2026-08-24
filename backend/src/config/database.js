@@ -60,24 +60,37 @@ const saveLocalDB = () => {
   }
 };
 
-const connectDB = async () => {
+const connectDB = async (retries = 5, delay = 3000) => {
   if (process.env.DATABASE_URL) {
-    try {
-      const { Pool } = require('pg');
-      pgPool = new Pool({
-        connectionString: process.env.DATABASE_URL,
-        ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-      });
+    const { Pool } = require('pg');
+    const isProduction = process.env.NODE_ENV === 'production';
 
-      const client = await pgPool.connect();
-      console.log('✅ [DB] Connected to PostgreSQL successfully.');
-      client.release();
-      usePostgres = true;
-      await initPgTables();
-      return;
-    } catch (err) {
-      console.warn('⚠️ [DB] PostgreSQL connection failed, falling back to Local Persistent DB.');
-      console.warn('Reason:', err.message);
+    pgPool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: isProduction || process.env.DATABASE_URL.includes('render.com') || process.env.DATABASE_URL.includes('neon.tech') || process.env.DATABASE_URL.includes('supabase')
+        ? { rejectUnauthorized: false }
+        : false,
+      connectionTimeoutMillis: 10000,
+    });
+
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        console.log(`📡 [DB] Connecting to PostgreSQL (Attempt ${attempt}/${retries})...`);
+        const client = await pgPool.connect();
+        console.log('✅ [DB] Connected to PostgreSQL successfully.');
+        client.release();
+        usePostgres = true;
+        await initPgTables();
+        return;
+      } catch (err) {
+        console.warn(`⚠️ [DB] PostgreSQL connection attempt ${attempt} failed: ${err.message}`);
+        if (attempt < retries) {
+          console.log(`⏳ [DB] Retrying in ${delay / 1000}s...`);
+          await new Promise((res) => setTimeout(res, delay));
+        } else {
+          console.warn('⚠️ [DB] All PostgreSQL connection attempts exhausted. Falling back to Local Persistent DB.');
+        }
+      }
     }
   }
 
